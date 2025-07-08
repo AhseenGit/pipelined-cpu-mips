@@ -221,10 +221,4 @@ Goals:
 - Clean, industry-style folder structure
 
 ## Contact
-
-Created by: [Your Name]  
-GitHub: [YourGitHubHandle]  
-Email: your@email.com
-
-## Contact
 later
