@@ -1,230 +1,117 @@
-0# Pipelined MIPS CPU in VHDL
+# Pipelined MIPS CPU (5-Stage, FPGA Verified)
 
-This project implements a fully functional 5-stage pipelined MIPS processor in VHDL, complete with hazard detection, forwarding logic, and control flow support. The core was developed and verified in ModelSim using real MIPS assembly test programs and is currently being synthesized and validated on the DE10-Standard FPGA with Quartus Prime and SignalTap.
+## Overview
 
-It reflects the full RTL-to-FPGA workflow expected in real-world SoC and ASIC design.
+This project implements a 5-stage pipelined MIPS CPU with full data hazard detection, forwarding, and pipeline control mechanisms. Developed as part of an advanced undergraduate hardware design course, the project includes:
 
-## Project Status
+* IF, ID, EX, MEM, and WB stages implemented
+* Load-use stall detection and forwarding logic
+* Branch flushing and control flow handling in Decode (ID) stage
+* Forwarding support into ID for branch operand comparison
+* Runtime IPC (Instructions Per Cycle) measurement
+* Breakpoint mechanism for controlled signal capture
 
-| Component                  | Status                               |
-|---------------------------|--------------------------------------|
-| RTL Design (VHDL)         | Completed                            |
-| ModelSim Simulation       | Verified with assembly programs      |
-| Instruction Coverage      | All supported types tested           |
-| Quartus Synthesis         | In Progress (target: DE10-Standard)  |
-| SignalTap Debugging       | Pending                              |
+### Verification Workflow
 
-## Pipeline Architecture
+1. ModelSim simulation of handwritten assembly programs
+2. Quartus synthesis and FPGA deployment
+3. SignalTap validation — real-time inspection of instruction flow, stalls, and memory access
 
-Implements the classic 5-stage MIPS architecture:
+---
 
-1. IF – Instruction Fetch  
-2. ID – Instruction Decode & Register Read  
-3. EX – Execute (ALU + forwarding)  
-4. MEM – Memory access  
-5. WB – Write Back
+## Architecture Overview
 
-Includes:
+![mips\_architecture](doc/mips_architecture.png)
+High-level datapath with forwarding, hazard detection, and branch resolution in Decode stage.
 
-- Data forwarding logic (EX/MEM/WB bypassing)  
-- Hazard detection & pipeline stalls  
-- Control hazard flush for branches/jumps  
-- Separate instruction/data memories (Harvard-style)
+---
 
-## Folder Structure
+## Forwarding and Data Hazard Resolution
 
-```
-mips_pipeline_rtl/
-├── VHDL/              # RTL: IF/ID/EX/MEM/WB, ALU, Control, etc.
-├── tb/                # Testbenches (unit + top-level)
-├── test/              # MIPS assembly test programs
-├── docs/              # Instruction reference, screenshots, SignalTap
-├── quartus/           # Project files, .mif, and pin configs
-└── README.md
-```
+To minimize pipeline stalls due to RAW (read-after-write) dependencies, the CPU includes a full forwarding unit.
 
-## Supported Instructions
+* **EX-stage forwarding**: Forwarding paths are implemented from MEM and WB stages back to the EX stage to resolve ALU-to-ALU dependencies without stalling.
+* **ID-stage forwarding**: For branch instructions resolved in Decode, the register values are forwarded from EX/MEM to support early comparison.
+* **Hazard detection unit**: When forwarding is not possible (e.g., a `lw` followed by a dependent instruction), the pipeline inserts a stall.
 
-Your CPU supports the following MIPS instructions:
+This combination of forwarding and hazard detection ensures correct execution while maintaining high performance.
 
-- Arithmetic: add, sub, addi, mul (16×16 → 32)
-- Logic & Shift: and, or, xor, andi, ori, xori, sll, srl
-- Memory: lw, sw, lui
-- Branching: beq, bne
-- Comparison: slt, slti
-- Jump & Link: j, jr, jal
+---
 
-Full list available in: docs/instruction_set_reference.pdf
+## Branch and Jump Handling
 
-## Note on Pseudo-Instructions
+* Branch instructions (`beq`, `bne`) are resolved in the Decode (ID) stage
+* Forwarding logic extends into ID to supply operands for branch comparison
+* This reduces the branch penalty to a single delay slot
+* When a branch is taken, the IF stage is flushed to discard the incorrect instruction
 
-Instructions like mov, li, la, bge, and blt are pseudo-instructions — not supported directly in hardware. For example:
+> This CPU implements a single delay slot control hazard model.
 
-- mov → add rd, rs, $zero  
-- li → lui + ori  
-- bge → slt + beq
+---
 
-Assembly programs must be rewritten using supported core instructions.
+## SignalTap Verification
 
-## Simulation & Testbench (ModelSim)
+### 1. Pipeline Execution
 
-Verified using hand-written MIPS assembly programs:
+![pipeline](doc/pipeline_flow.png)
+Shows instruction flow through IF → ID → EX → MEM → WB over multiple cycles.
+Captured near program end, triggered by breakpoint.
 
-- Data forwarding tests (RAW hazards)
-- Load-use stalls
-- Jump and branch correctness
-- Memory read/write verification
+### 2. IPC Measurement
 
-All waveforms checked in ModelSim. No test failed.
+![ipc\_formula](doc/ipc_formula.png)
+Since we handle wrong fetched instruction early in the pipeline, the depth =1.
 
-Assembly programs included in /test folder.
+![ipc](doc/ipc_counters.png)
+Instruction count = 166, Clock count = 180, Flush/hazard count = 14
+Computed IPC =(166-14×1)/180≈ 0.84.
 
-## Quartus + FPGA (In Progress)
+### 3. Load-Use Hazard Stall
 
-Target board: DE10-Standard (Intel Cyclone V)  
-Quartus Prime is used for:
+![lw\_stall](doc/lw_stall.png)
+One-cycle stall inserted to handle a load-use data hazard.
+Pipeline correctly delays dependent `add` instruction following a `lw`.
 
-- RTL synthesis & fitting  
-- .mif memory initialization  
-- Pin constraints & I/O mapping  
-- SignalTap waveform debugging
+### 4. Branch Flush Verification
 
-Goals:
+![flush](doc/flush.png)
+Control hazard: branch misprediction causes instruction flush.
+Flush signal asserted; pipeline redirected correctly with no writeback corruption.
 
-- SignalTap visibility for PC, ALU, and register file  
-- LED/GPIO display of results  
-- UART interface for program loading (planned)
+---
 
-## Project Highlights
+## Breakpoint Trigger (Hardware-Controlled)
 
-- Real MIPS assembly execution, not test vectors  
-- Full ModelSim verification  
-- Modular and extensible architecture  
-- FPGA-ready RTL with SignalTap debugging plan  
-- Clean folder structure and documentation
+All SignalTap captures were triggered using a hardware-configurable breakpoint mechanism:
 
-## Why This Project Matters
+* Breakpoint address selected via FPGA switches
+* When `PC` matches this address, a `breakpoint_w` signal is asserted
+* Used as SignalTap trigger to freeze execution at a specific instruction
 
-This project demonstrates:
-- Real-world understanding of pipelined architecture and data/control hazards
-- Proficiency in RTL design and simulation (VHDL, ModelSim)
-- Toolchain familiarity with Quartus Prime and FPGA debugging via SignalTap
-- Ability to execute full hardware development cycle from spec to tested FPGA system
-# Pipelined MIPS CPU in VHDL
+**Benefits:**
 
-This project implements a fully functional 5-stage pipelined MIPS processor in VHDL, complete with hazard detection, forwarding logic (including forwarding to ID stage for branch comparisons), and control flow support. The core was developed and verified in ModelSim using real MIPS assembly test programs and is currently being synthesized and validated on the DE10-Standard FPGA with Quartus Prime and SignalTap.
+* Accurate IPC measurement
+* Clear snapshots of pipeline state
+* Targeted capture of hazard and control behavior
 
-It reflects the full RTL-to-FPGA workflow expected in real-world SoC and ASIC design.
+---
 
-## Project Status
+## What I Learned
 
-| Component                  | Status                               |
-|---------------------------|--------------------------------------|
-| RTL Design (VHDL)         | Completed                            |
-| ModelSim Simulation       | Verified with assembly programs      |
-| Instruction Coverage      | All supported types tested           |
-| Quartus Synthesis         | In Progress (target: DE10-Standard)  |
-| SignalTap Debugging       | Pending                              |
-
-## Pipeline Architecture
-
-Implements the classic 5-stage MIPS architecture:
-
-1. IF – Instruction Fetch  
-2. ID – Instruction Decode & Register Read  
-3. EX – Execute (ALU + forwarding)  
-4. MEM – Memory access  
-5. WB – Write Back
-
-Includes:
-
-- Data forwarding logic:
-  - EX stage receives operands from MEM and WB stages
-  - ID stage (used for branch comparison) receives operands from EX, MEM, and WB stages
-- Hazard detection and pipeline stall logic for load-use hazards
-- PC flush on control hazards (branches, jumps)
-- Separate instruction and data memories (Harvard-style)
-
-## Folder Structure
-
-```
-mips_pipeline_rtl/
-├── VHDL/              # RTL: IF/ID/EX/MEM/WB, ALU, Control, etc.
-├── tb/                # Testbenches (unit + top-level)
-├── test/              # MIPS assembly test programs
-├── docs/              # Instruction reference, screenshots, SignalTap
-├── quartus/           # Project files, .mif, and pin configs
-└── README.md
-```
-
-## Supported Instructions
-
-Your CPU supports the following MIPS instructions:
-
-- Arithmetic: add, sub, addi, mul (16×16 → 32)
-- Logic & Shift: and, or, xor, andi, ori, xori, sll, srl
-- Memory: lw, sw, lui
-- Branching: beq, bne
-- Comparison: slt, slti
-- Jump & Link: j, jr, jal
-
-Full list available in: docs/instruction_set_reference.pdf
-
-## Note on Pseudo-Instructions
-
-Instructions like mov, li, la, bge, and blt are pseudo-instructions — not supported directly in hardware. For example:
-
-- mov → add rd, rs, $zero  
-- li → lui + ori  
-- bge → slt + beq
-
-Assembly programs must be rewritten using supported core instructions.
-
-## Simulation & Testbench (ModelSim)
-
-Verified using hand-written MIPS assembly programs:
-
-- Forwarding from MEM/WB to EX stage for ALU operations
-- Forwarding from EX/MEM/WB to ID stage for branches (`beq`, `bne`)
-- Load-use stall detection and control hazard flush
-- Correct memory access and control flow operation
-
-All waveforms were reviewed in ModelSim and confirmed correct.
-
-Assembly programs included in /test folder.
-
-Instruction and data memories (`ITCM.hex`, `DTCM.hex`) contain real MIPS programs loaded into memory and executed through the full pipeline, simulating actual embedded system behavior.
-
-## Quartus + FPGA (In Progress)
-
-Target board: DE10-Standard (Intel Cyclone V)  
-Quartus Prime is used for:
-
-- RTL synthesis & fitting  
-- .mif memory initialization  
-- Pin constraints & I/O mapping  
-- SignalTap waveform debugging
-
-Goals:
-
-- SignalTap visibility for PC, ALU, and register file  
-- LED/GPIO display of results  
-- UART interface for program loading (planned)
-
-## Project Highlights
-
-- Executes real MIPS assembly programs, not synthetic vectors  
-- Verified with ModelSim using real-world hazard scenarios  
-- Modular, extensible VHDL architecture  
-- Forwarding logic covers ALU and branch comparisons  
-- FPGA-ready RTL with documented debug flow  
-- Clean, industry-style folder structure
+This project deepened my understanding of pipelined CPU architecture, control logic, and real-time FPGA debugging. Key learning outcomes:
+
+- Built a complete 5-stage MIPS CPU in VHDL with forwarding and stalling
+- Resolved data/control hazards using custom hazard detection logic
+- Measured IPC and performance using real execution metrics on FPGA
+- Integrated hardware breakpoints and used SignalTap for runtime validation
+- Strengthened skills in simulation (ModelSim), synthesis (Quartus), and hardware testing
+
+---
 
 ## Contact
 
-Created by: [Your Name]  
-GitHub: [YourGitHubHandle]  
-Email: your@email.com
+For questions, feedback, or collaboration inquiries, feel free to reach out:
 
-## Contact
-later
+**Ahseen**  
+ azazmehhus@example.com
+

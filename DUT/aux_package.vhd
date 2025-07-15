@@ -13,6 +13,8 @@ package aux_package is
 
 COMPONENT Datahazard_Unit IS
 	PORT( 	
+	    clk_i       : in  std_logic;
+        rst_i     : in  std_logic;
 		instruction_i		: IN	STD_LOGIC_VECTOR(31 DOWNTO 0);
 		WriteReg_Ex_i       : IN    STD_LOGIC_VECTOR(4 DOWNTO 0); -- to check if stalling inst. dependent on LW. for example add after LW.
 	    WriteReg_MEM_i      : IN    STD_LOGIC_VECTOR(4 DOWNTO 0);
@@ -23,7 +25,9 @@ COMPONENT Datahazard_Unit IS
 		PCWrite_o			: OUT 	STD_LOGIC; -- freeze the PC. when LW in the pipeline
 		nope_ctl_o          : OUT	STD_LOGIC; --when data dependency, reset ID_EX ctl signals.	
 		Stall_br_o          : OUT	STD_LOGIC;  -- 
-		Stall_o		        : OUT	STD_LOGIC  --
+		Stall_o		        : OUT	STD_LOGIC;  --
+		STCNT_o   : out std_logic_vector(7 downto 0) --Stall Counter
+
 	);
 end COMPONENT;
 
@@ -61,20 +65,37 @@ END COMPONENT;
 		);
 		PORT(	
 			rst_i		 		:IN	STD_LOGIC;
-			clk_i				:IN	STD_LOGIC; 
+			clk_i				:IN	STD_LOGIC;
+            BPADDR_i            :IN STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);			
 			-- Output important signals to pins for easy display in Simulator
-			pc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
-			alu_result_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			read_data1_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			read_data2_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			write_data_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			instruction_top_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			Branch_ctrl_o		:OUT 	STD_LOGIC_VECTOR(1 downto 0);
+			--pc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			--alu_result_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--read_data1_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--read_data2_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--write_data_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--instruction_top_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--Branch_ctrl_o		:OUT 	STD_LOGIC_VECTOR(1 downto 0);
 			--Zero_o				:OUT 	STD_LOGIC; 
-			MemWrite_ctrl_o		:OUT 	STD_LOGIC;
-			RegWrite_ctrl_o		:OUT 	STD_LOGIC;
+			--MemWrite_ctrl_o		:OUT 	STD_LOGIC;
+			--RegWrite_ctrl_o		:OUT 	STD_LOGIC;
+			
+			IFpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			IFinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			IDpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			IDinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			EXpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			EXinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			MEMpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			MEMinstruction_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			WBpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			WBinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			
 			mclk_cnt_o			:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
-			inst_cnt_o 			:OUT	STD_LOGIC_VECTOR(INST_CNT_WIDTH-1 DOWNTO 0)
+			inst_cnt_o 			:OUT	STD_LOGIC_VECTOR(INST_CNT_WIDTH-1 DOWNTO 0);
+			STCNT_o   			:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0);
+			STRIGGER_o          :OUT   STD_LOGIC;
+			FHCNT_o				:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0)
+
 		);		
 	end component;
 ---------------------------------------------------------  
@@ -185,6 +206,8 @@ END component;
 				br_addr_o       : OUT   STD_LOGIC_VECTOR(7 DOWNTO 0);  --New 
 				jump_addr_o		: OUT 	STD_LOGIC_VECTOR(7 DOWNTO 0);
 				flush_o			: OUT   STD_LOGIC;
+				FlushCNT_o			: OUT 	STD_LOGIC_VECTOR(7 DOWNTO 0);
+
 				rs_o            : OUT   STD_LOGIC_VECTOR(4 DOWNTO 0);
 				rt_o            : OUT   STD_LOGIC_VECTOR(4 DOWNTO 0);
 				write_reg_data_i  : IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
@@ -210,6 +233,7 @@ END component;
 			br_taken_i      : IN    STD_LOGIC;
 		    br_addr_i       : IN    STD_LOGIC_VECTOR(7 DOWNTO 0); 
 			pc_write_i      : IN    STD_LOGIC;
+			break_i         : IN    STD_LOGIC;
 			jump_addr_i     : IN    STD_LOGIC_VECTOR(7 DOWNTO 0);
 			pc_o 			: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 			pc_plus4_o 		: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
@@ -255,11 +279,16 @@ COMPONENT IF_ID IS
         clk_i          : IN  STD_LOGIC;
         rst_i          : IN  STD_LOGIC;
         pc_plus4_i     : IN  STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+		pc_i 		   : IN	 STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
         instruction_i  : IN  STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-		flush_i        : IN  STD_LOGIC; 
-		stall_i        : IN  STD_LOGIC;  
+		flush_i        : IN  STD_LOGIC;  -- from control
+		stall_i        : IN  STD_LOGIC;  -- from data hazard
+		break_i         : IN  STD_LOGIC;
+		--breakpoinAddr_i: IN	STD_LOGIC_VECTOR(9 DOWNTO 0);
         pc_plus4_o     : OUT STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+        pc_o 			: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
         instruction_o  : OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
+		--break_o        : OUT STD_LOGIC
     );
 END COMPONENT;
 ----------------------------------------------------------------------
@@ -295,8 +324,12 @@ COMPONENT ID_EX IS
         reg_write_i        : IN  STD_LOGIC;
         opcode_i           : IN  STD_LOGIC_VECTOR(OPCODE_WIDTH-1 DOWNTO 0);
         funct_i            : IN  STD_LOGIC_VECTOR(FUNCT_WIDTH-1 DOWNTO 0);
-		--stall_i            : IN  STD_LOGIC;
+		--stall_i            : IN  STD_LOGIC; -- from datahazard unit
 		nope_ctl_i         : IN  STD_LOGIC;
+		pc_i 		       : IN	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+		
+        instruction_i      : IN  STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+		 breakpoinAddr_i : IN  STD_LOGIC_VECTOR(9 DOWNTO 0);
 
         -- Outputs to EX stage
         pc_plus4_o         : OUT STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
@@ -314,7 +347,10 @@ COMPONENT ID_EX IS
         mem_to_reg_o       : OUT STD_LOGIC;
         reg_write_o        : OUT STD_LOGIC;
         opcode_o           : OUT STD_LOGIC_VECTOR(OPCODE_WIDTH-1 DOWNTO 0);
-        funct_o            : OUT STD_LOGIC_VECTOR(FUNCT_WIDTH-1 DOWNTO 0)
+        funct_o            : OUT STD_LOGIC_VECTOR(FUNCT_WIDTH-1 DOWNTO 0);
+		pc_o 			   : OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+		break_o         : OUT STD_LOGIC;
+        instruction_o      : OUT  STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
     );
 END COMPONENT;
 -------------------------------------------------------------------------------
@@ -322,7 +358,8 @@ END COMPONENT;
 COMPONENT EX_MEM IS
     GENERIC (
         DATA_BUS_WIDTH : INTEGER := 32;
-        REG_ADDR_WIDTH : INTEGER := 5
+        REG_ADDR_WIDTH : INTEGER := 5;
+		PC_WIDTH	   : INTEGER := 10
     );
     PORT (
         clk_i          : IN  STD_LOGIC;
@@ -336,6 +373,8 @@ COMPONENT EX_MEM IS
         mem_to_reg_i   : IN  STD_LOGIC;
         mem_read_i     : IN  STD_LOGIC;
         mem_write_i    : IN  STD_LOGIC;
+		pc_i 		   : IN	 STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+        instruction_i  : IN  STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 
         -- Outputs to MEM stage
         alu_result_o   : OUT STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
@@ -344,7 +383,9 @@ COMPONENT EX_MEM IS
         reg_write_o    : OUT STD_LOGIC;
         mem_to_reg_o   : OUT STD_LOGIC;
         mem_read_o     : OUT STD_LOGIC;
-        mem_write_o    : OUT STD_LOGIC
+        mem_write_o    : OUT STD_LOGIC;
+		pc_o 		   : OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+        instruction_o  : OUT  STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
     );
 END COMPONENT;
 ---------------------------------------------------------------------------
@@ -358,12 +399,17 @@ COMPONENT MEM_WB IS
         MemtoReg_in    : IN  STD_LOGIC;
         RegWrite_in    : IN  STD_LOGIC;
         Write_Reg_in   : IN  STD_LOGIC_VECTOR(4 DOWNTO 0);
+		pc_i 		   : IN	STD_LOGIC_VECTOR(9 DOWNTO 0);
+        instruction_i  : IN  STD_LOGIC_VECTOR(31 DOWNTO 0);
+		
         -- Outputs to WB stage
         ALU_Result_out : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
         Read_Data_out  : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
         MemtoReg_out   : OUT STD_LOGIC;
         RegWrite_out   : OUT STD_LOGIC;
-        Write_Reg_out  : OUT STD_LOGIC_VECTOR(4 DOWNTO 0)
+        Write_Reg_out  : OUT STD_LOGIC_VECTOR(4 DOWNTO 0);
+		pc_o 		   : OUT	STD_LOGIC_VECTOR(9 DOWNTO 0);
+        instruction_o  : OUT  STD_LOGIC_VECTOR(31 DOWNTO 0)
     );
 END COMPONENT;
 

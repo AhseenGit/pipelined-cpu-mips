@@ -1,4 +1,6 @@
-
+---------------------------------------------------------------------------------------------
+-- Copyright 2025 Hananya Ribo 
+-- Advanced CPU architecture and Hardware Accelerators Lab 361-1-4693 BGU
 ---------------------------------------------------------------------------------------------
 library IEEE;
 use ieee.std_logic_1164.all;
@@ -39,10 +41,10 @@ package cond_comilation_package is
 --	elsif  G_DATA_WORDS_NUM=M4K_MEM_WORDS_NUM then
 --		ITCM_WORDS_NUM=DTCM_WORDS_NUM=1024
 --------------------------------------------------------
-	constant G_MODELSIM	: integer 			:= 1; --for modelsim
-	constant G_WORD_GRANULARITY : boolean 	:= True; --for modelsim
-	constant G_ADDRWIDTH : integer 			:= MODELSIM_M9K_ADDRWIDTH; --for modelsim
-	constant G_DATA_WORDS_NUM : integer 	:= MODELSIM_M9K_MEM_WORDS_NUM;-- for modelsim
+	constant G_MODELSIM	: integer 			:= 1;
+	constant G_WORD_GRANULARITY : boolean 	:= True;
+	constant G_ADDRWIDTH : integer 			:=MODELSIM_M9K_ADDRWIDTH;----
+	constant G_DATA_WORDS_NUM : integer 	:=MODELSIM_M9K_MEM_WORDS_NUM; --
 --------------------------------------------------------
 
 end cond_comilation_package;

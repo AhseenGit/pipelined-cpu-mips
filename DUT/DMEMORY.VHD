@@ -1,4 +1,6 @@
-
+---------------------------------------------------------------------------------------------
+-- Copyright 2025 Hananya Ribo 
+-- Advanced CPU architecture and Hardware Accelerators Lab 361-1-4693 BGU
 ---------------------------------------------------------------------------------------------
 --  Dmemory module (implements the data memory for the MIPS computer)
 LIBRARY IEEE;

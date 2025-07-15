@@ -1,4 +1,6 @@
-
+---------------------------------------------------------------------------------------------
+-- Copyright 2025 Hananya Ribo 
+-- Advanced CPU architecture and Hardware Accelerators Lab 361-1-4693 BGU
 ---------------------------------------------------------------------------------------------
 -- Ifetch module (provides the PC and instruction 
 --memory for the MIPS computer)
@@ -28,6 +30,7 @@ ENTITY Ifetch IS
 		br_taken_i      : IN    STD_LOGIC;                  --New
 		br_addr_i       : IN    STD_LOGIC_VECTOR(7 DOWNTO 0);  --New 
 		pc_write_i      : IN    STD_LOGIC;
+		break_i         : IN    STD_LOGIC;
 		jump_addr_i     : IN    STD_LOGIC_VECTOR(7 DOWNTO 0);
 		pc_o 			: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
 		pc_plus4_o 		: OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
@@ -76,24 +79,27 @@ BEGIN
 	--send address to inst. memory address register
 	G1: 
 	if (WORD_GRANULARITY = True) generate 		-- i.e. each WORD has uniqe address
-		itcm_addr_w <= next_pc_mux;
+		itcm_addr_w <= next_pc_mux ;
 	elsif (WORD_GRANULARITY = False) generate 	-- i.e. each BYTE has uniqe address
-		itcm_addr_w <= next_pc_mux & "00";
+		itcm_addr_w <= next_pc_mux  & "00";
 	end generate;
 		
 	-- Adder to increment PC by 4
 	pc_plus4_r( 1 DOWNTO 0 )  		 <= "00";
-    pc_plus4_r(PC_WIDTH-1 DOWNTO 2)  <= pc_q(PC_WIDTH-1 DOWNTO 2) + 1 when (pc_write_i='1') else pc_q(PC_WIDTH-1 DOWNTO 2) ;-- we can plus 4 here if we intersted only on 8-bit PC !
+   -- pc_plus4_r(PC_WIDTH-1 DOWNTO 2)  <= pc_q(PC_WIDTH-1 DOWNTO 2) + 1 when (pc_write_i='1' and break_i='0') else pc_q(PC_WIDTH-1 DOWNTO 2) ;-- we can plus 4 here if we intersted only on 8-bit PC !
 											
 	-- Mux to select Branch Address or PC + 4        
 	------------------------------------------------------------------------------------				
 next_pc_mux <=
-    pc_q(PC_WIDTH-1 DOWNTO 2) when (pc_write_i = '0') else
+    pc_q(PC_WIDTH-1 DOWNTO 2) when (pc_write_i = '0' and break_i='0') else
     br_addr_i when (br_taken_i = '1') else
     jump_addr_i when (JUMP_i = '1') else -- for jmp,jal and jr
     pc_plus4_r(PC_WIDTH-1 DOWNTO 2);
-					
- 
+	
+	pc_plus4_r(PC_WIDTH-1 DOWNTO 2) <=
+    pc_q(PC_WIDTH-1 DOWNTO 2) + 1 when (pc_write_i='1' and break_i='0' and rst_flag_q = '0')
+    else pc_q(PC_WIDTH-1 DOWNTO 2);
+
 	-------------------------------------------------------------------------------------
 	process (clk_i)
 	BEGIN
@@ -101,24 +107,14 @@ next_pc_mux <=
 			rst_flag_q <= rst_i;
 		end if;
 	end process;
-	-------------------------------------------------------------------------------------
-	-- PROCESS (clk_i, rst_i)
-	-- BEGIN
-		-- IF rst_i = '1' THEN
-			-- pc_q(PC_WIDTH-1 DOWNTO 2) <= (OTHERS => '0') ; 
-		-- ELSIF(clk_i'EVENT  AND clk_i='1' and pc_write_i='1') THEN --pc_write=0 --> stall
-			-- pc_q(PC_WIDTH-1 DOWNTO 2) <= next_pc_w;	
-		-- else
-		    -- pc_q(PC_WIDTH-1 DOWNTO 2) <= pc_q(PC_WIDTH-1 DOWNTO 2);
-		-- END IF;
-	-- END PROCESS;
+
 
 process(clk_i, rst_i)
 begin
     if rst_i = '1' then
         pc_q(PC_WIDTH-1 DOWNTO 2) <= (others => '0');
     elsif rising_edge(clk_i) then
-        if pc_write_i = '1' then
+        if (pc_write_i = '1' and break_i='0') then
             pc_q(PC_WIDTH-1 DOWNTO 2) <= next_pc_mux;
         end if;
     end if;
@@ -134,18 +130,7 @@ begin
 		pc_prev_q	<=	pc_q;
 	end if;
 end process;
----------------------------------------------------------------------------------------
--- process (clk_i , rst_i)
--- begin
-	-- if rst_i = '1' then
-		-- inst_cnt_q	<=	(others	=> '0');
-	-- elsif rising_edge(clk_i) then
-		-- if pc_prev_q = pc_q then
-			-- inst_cnt_q	<=	inst_cnt_q + '1';
-		-- end if;
-	-- end if;
--- end process;
----------------------------------------------------------------------------------------
+
 	-- copy output signals - allows read inside module
 	pc_o 				<= 	pc_q;
 	pc_plus4_o 			<= 	pc_plus4_r;

@@ -35,6 +35,7 @@ ENTITY Idecode IS
 			br_addr_o       : OUT   STD_LOGIC_VECTOR(7 DOWNTO 0);  --New 
             jump_addr_o		: OUT 	STD_LOGIC_VECTOR(7 DOWNTO 0);
             flush_o			: OUT   STD_LOGIC;
+			FlushCNT_o			: OUT 	STD_LOGIC_VECTOR(7 DOWNTO 0);
 			rs_o            : OUT   STD_LOGIC_VECTOR(4 DOWNTO 0);
 			rt_o            : OUT   STD_LOGIC_VECTOR(4 DOWNTO 0);
             write_reg_data_i  : IN 	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0)
@@ -62,6 +63,7 @@ TYPE register_file IS ARRAY (0 TO 31) OF STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNT
 	signal WB_result_w         :STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 	signal jr_addr_w           :STD_LOGIC_VECTOR(7 DOWNTO 0);
 	signal jump_addr_w         :STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	signal flush_counter           :STD_LOGIC_VECTOR(7 DOWNTO 0) :=(others => '0');
 BEGIN
 	rs_register_w 			<= instruction_i(25 DOWNTO 21);
    	rt_register_w 			<= instruction_i(20 DOWNTO 16);
@@ -127,16 +129,20 @@ BEGIN
 	process(clk_i,rst_i)
 	begin
 		if (rst_i='1') then
+			flush_counter<= (others =>'0');
 			FOR i IN 0 TO 31 LOOP
 				-- RF_q(i) <= CONV_STD_LOGIC_VECTOR(i,32);
 				RF_q(i) <= CONV_STD_LOGIC_VECTOR(0,32);
 			END LOOP;
 		elsif (clk_i'event and clk_i='1') then
+			if flush_o='1' then
+				flush_counter<=flush_counter+1;
+			end if;
 			if (RegWrite_ctrl_i = '1' AND write_reg_addr_w /= 0) then
 				RF_q(CONV_INTEGER(write_reg_addr_w)) <= write_reg_data_i;
 				-- index is integer type so we must use conv_integer for type casting
 			end if;
 		end if;
 end process;
-
+FlushCNT_o<=flush_counter;
 END behavior;

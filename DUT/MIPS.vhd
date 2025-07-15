@@ -23,20 +23,36 @@ ENTITY MIPS IS
 			INST_CNT_WIDTH : integer 	:= 16
 	);
 	PORT(	rst_i		 		:IN	STD_LOGIC;
-			clk_i				:IN	STD_LOGIC; 
+			clk_i				:IN	STD_LOGIC;
+            BPADDR_i            :IN STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);			
 			-- Output important signals to pins for easy display in SignalTap
-			pc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
-			alu_result_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			read_data1_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			read_data2_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			write_data_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			instruction_top_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
-			Branch_ctrl_o		:OUT 	STD_LOGIC_VECTOR(1 downto 0);
+			--pc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			--alu_result_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--read_data1_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--read_data2_o 		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--write_data_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--instruction_top_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			--Branch_ctrl_o		:OUT 	STD_LOGIC_VECTOR(1 downto 0);
 			--Zero_o				:OUT 	STD_LOGIC; 
-			MemWrite_ctrl_o		:OUT 	STD_LOGIC;
-			RegWrite_ctrl_o		:OUT 	STD_LOGIC;
+			--MemWrite_ctrl_o		:OUT 	STD_LOGIC;
+			--RegWrite_ctrl_o		:OUT 	STD_LOGIC;
+			
+			IFpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			IFinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			IDpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			IDinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			EXpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			EXinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			MEMpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			MEMinstruction_o	:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			WBpc_o				:OUT	STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+			WBinstruction_o		:OUT	STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+			
 			mclk_cnt_o			:OUT	STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
-			inst_cnt_o 			:OUT	STD_LOGIC_VECTOR(INST_CNT_WIDTH-1 DOWNTO 0)
+			inst_cnt_o 			:OUT	STD_LOGIC_VECTOR(INST_CNT_WIDTH-1 DOWNTO 0);
+			STCNT_o 			:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0);
+			STRIGGER_o          :OUT   STD_LOGIC;
+			FHCNT_o				:OUT	STD_LOGIC_VECTOR(7 DOWNTO 0)
 	);		
 END MIPS;
 -------------------------------------------------------------------------------------
@@ -64,6 +80,12 @@ ARCHITECTURE structure OF MIPS IS
 	SIGNAL mclk_cnt_q		: STD_LOGIC_VECTOR(CLK_CNT_WIDTH-1 DOWNTO 0);
 	SIGNAL inst_cnt_w		: STD_LOGIC_VECTOR(INST_CNT_WIDTH-1 DOWNTO 0);
 	SIGNAL jump_w           : STD_LOGIC;
+	SIGNAL pc_w				:STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+	SIGNAL IDpc_w				:STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+	SIGNAL EXpc_w				:STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+	SIGNAL EXinstruction_w		:STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
+	SIGNAL MEMpc_w				:STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
+	SIGNAL MEMinstruction_w     :STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
 	-- IF to ID
 	SIGNAL pc_plus4_IFID      : STD_LOGIC_VECTOR(PC_WIDTH-1 DOWNTO 0);
     SIGNAL instruction_IFID   : STD_LOGIC_VECTOR(DATA_BUS_WIDTH-1 DOWNTO 0);
@@ -133,7 +155,7 @@ ARCHITECTURE structure OF MIPS IS
 	signal Stall_br_w     : STD_LOGIC;      
 	signal stall_w		  : STD_LOGIC;
 	signal pcwrite_w      : STD_LOGIC;
-	
+	signal break_w		  : STD_LOGIC;
 	signal jump_addr_w    :std_logic_vector( 7 downto 0); 
 	
 	signal stall_ctl_w    : STD_LOGIC;
@@ -145,19 +167,26 @@ ARCHITECTURE structure OF MIPS IS
 BEGIN
 					-- copy important signals to output pins for easy 
 					-- display in Simulator
-   instruction_top_o 	<= 	instruction_w;
-   alu_result_o 		<= 	alu_result_w;
-   read_data1_o 		<= 	read_data1_w;
-   read_data2_o 		<= 	read_data2_w;
-   write_data_o  		<= 	dtcm_data_rd_w WHEN MemtoReg_w = '1' ELSE 
-							alu_result_w;
-							
-   Branch_ctrl_o 		<= 	branch_w;
-   --Zero_o 				<= 	zero_w;
-   RegWrite_ctrl_o 		<= 	reg_write_w;
-   MemWrite_ctrl_o 		<= 	mem_write_w;	
-
+   --instruction_top_o 	<= 	instruction_w;
+   --alu_result_o 		<= 	alu_result_w;
+   --read_data1_o 		<= 	read_data1_w;
+   --read_data2_o 		<= 	read_data2_w;
+--write_data_o  		<= 	dtcm_data_rd_w WHEN MemtoReg_w = '1' ELSE 
+							--alu_result_w;
 	
+	IFpc_o  <=          pc_w;
+	IFinstruction_o		<= instruction_w;
+	IDinstruction_o		<=instruction_IFID;
+	STRIGGER_o          <= break_w;
+   --Branch_ctrl_o 		<= 	branch_w;
+   --Zero_o 				<= 	zero_w;
+   --RegWrite_ctrl_o 		<= 	reg_write_w;
+   --MemWrite_ctrl_o 		<= 	mem_write_w;	
+	IDpc_w     			<=IDpc_o;
+	EXpc_w				<=EXpc_o;
+	EXinstruction_w		<=EXinstruction_o;
+	MEMpc_w				<=MEMpc_o;
+	MEMinstruction_w	<=MEMinstruction_o;
 	-- connect the PLL component
 	G0:
 	if (MODELSIM = 0) generate
@@ -189,8 +218,9 @@ BEGIN
 		br_taken_i      => br_taken_w,
 		br_addr_i       => addr_br_w,
 		pc_write_i      => pcwrite_w,
+		break_i         => break_w,
 		jump_addr_i     => jump_addr_w,
-		pc_o 			=> pc_o,
+		pc_o 			=> pc_w,
 		instruction_o 	=> instruction_w,
     	pc_plus4_o	 	=> pc_plus4_w,
 		inst_cnt_o		=> inst_cnt_w
@@ -227,6 +257,7 @@ BEGIN
 		    br_addr_o           => addr_br_w,
 			jump_addr_o         => jump_addr_w,
 			flush_o             => flush_w,
+			FlushCNT_o			=>FHCNT_o,
 			rs_o                => rsD_w,
 			rt_o                => rtD_w,
 			write_reg_data_i    => write_reg_data_w
@@ -301,6 +332,8 @@ BEGIN
     
 	DataHazard: Datahazard_Unit
 	port map (
+	    clk_i 			=> MCLK_w,  
+		rst_i 			=> rst_i,
 		instruction_i  => 	instruction_IFID,
     	WriteReg_Ex_i  =>   rt_IDEX, -- for handling LW
 	    WriteReg_MEM_i =>   rd_EXMEM, 
@@ -311,7 +344,9 @@ BEGIN
 		PCWrite_o 	   =>   pcwrite_w,
 		nope_ctl_o     =>   nop_ctl_w,
 		Stall_br_o     =>   Stall_br_w,
-		Stall_o	       =>	stall_w
+		Stall_o	       =>	stall_w,
+		STCNT_o   	   =>   STCNT_o --Stall Counter
+
     );		
 					  
 	WB_Stage: entity work.WB
@@ -373,11 +408,18 @@ IF_ID_Stage : entity work.IF_ID
         clk_i         => MCLK_w,
         rst_i         => rst_i,
         pc_plus4_i    => pc_plus4_w,
+		pc_i		  =>pc_w,
         instruction_i => instruction_w,
 		flush_i       => flush_w,
 		stall_i       => stall_w,
+		--breakpoinAddr_i   => BPADDR_i,
+		break_i        => break_w,
+		
         pc_plus4_o    => pc_plus4_IFID,
+		pc_o		 => IDpc_o,
         instruction_o => instruction_IFID
+		--break_o        => break_w
+		
     );
 -------------------------------------------
 -----Stage 2
@@ -411,7 +453,11 @@ ID_EX_Stage : entity work.ID_EX
         opcode_i         => instruction_IFID(31 DOWNTO 26),
 		funct_i          => instruction_IFID(5 DOWNTO 0),
 		nope_ctl_i      =>nop_ctl_w,
-        
+		--break_i        => break_w,
+        pc_i			=>IDpc_w,
+		instruction_i	=>instruction_IFID,
+		breakpoinAddr_i   => BPADDR_i,
+		
         -- Outputs to EX stage
         pc_plus4_o       => pc_plus4_IDEX,
         read_data1_o     => read_data1_IDEX,
@@ -428,7 +474,10 @@ ID_EX_Stage : entity work.ID_EX
         mem_to_reg_o     => mem_to_reg_IDEX,
         reg_write_o      => reg_write_IDEX,
         opcode_o         => opcode_IDEX,
-		funct_o  => funct_IDEX
+		funct_o  => funct_IDEX,
+		pc_o			=>EXpc_o,
+		break_o        => break_w,
+		instruction_o	=>EXinstruction_o
     );
 
 
@@ -438,7 +487,8 @@ ID_EX_Stage : entity work.ID_EX
 EX_MEM_Stage : entity work.EX_MEM
     generic map (
         DATA_BUS_WIDTH => DATA_BUS_WIDTH,
-        REG_ADDR_WIDTH => 5
+        REG_ADDR_WIDTH => 5,
+		PC_WIDTH	   => PC_WIDTH
     )
     port map (
         clk_i          => MCLK_w,
@@ -451,6 +501,9 @@ EX_MEM_Stage : entity work.EX_MEM
         mem_to_reg_i   => mem_to_reg_IDEX,
         mem_read_i     => mem_read_IDEX,
         mem_write_i    => mem_write_IDEX,
+		--break_i        => break_w,
+		pc_i			=>EXpc_w,
+		instruction_i	=>EXinstruction_w,
 
         alu_result_o   => alu_result_EXMEM,
         write_data_o   => write_data_EXMEM, -- Write data
@@ -458,7 +511,9 @@ EX_MEM_Stage : entity work.EX_MEM
         reg_write_o    => reg_write_EXMEM,
         mem_to_reg_o   => mem_to_reg_EXMEM,
         mem_read_o     => mem_read_EXMEM,
-        mem_write_o    => mem_write_EXMEM
+        mem_write_o    => mem_write_EXMEM,
+		pc_o			=>MEMpc_o,
+		instruction_o	=>MEMinstruction_o
     );
 
 -----------------------------------------------
@@ -474,12 +529,18 @@ MEM_WB_Stage : entity work.MEM_WB
         MemtoReg_in   => mem_to_reg_EXMEM,  
         RegWrite_in   => reg_write_EXMEM, 
         Write_Reg_in  => rd_EXMEM,
+		--breakpoinAddr_i   => BPADDR_i,
+		pc_i		  =>MEMpc_w,
+		instruction_i =>MEMinstruction_w,
         
         ALU_Result_out => ALU_res_WB_w,
         Read_Data_out  => Read_data_WB_w,
         MemtoReg_out   => MemtoReg_WB_w,
         RegWrite_out   => RegWrite_ID_w, --ctl signal
-        Write_Reg_out  => rd_ID_w -- rd_i in ID.
+        Write_Reg_out  => rd_ID_w, -- rd_i in ID.
+		--break_o        => break_w,
+		pc_o		   =>WBpc_o,
+		instruction_o  =>WBinstruction_o
 		);
 
 
@@ -503,7 +564,7 @@ process (MCLK_w, rst_i)
 	if rst_i = '1' then
 		inst_cnt_q <= (others => '0');
 	elsif rising_edge(MCLK_w) then
-		if instruction_IFID /= x"00000000" then  -- optionally skip NOPs
+		if instruction_IFID /= x"00000000" and break_w='0' then  -- skip NOPs
 			inst_cnt_q <= inst_cnt_q + 1;
 		end if;
 	end if;

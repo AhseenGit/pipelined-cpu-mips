@@ -1,4 +1,6 @@
-
+---------------------------------------------------------------------------------------------
+-- Copyright 2025 Hananya Ribo 
+-- Advanced CPU architecture and Hardware Accelerators Lab 361-1-4693 BGU
 ---------------------------------------------------------------------------------------------
 library IEEE;
 use ieee.std_logic_1164.all;
