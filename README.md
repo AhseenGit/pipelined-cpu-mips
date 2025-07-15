@@ -21,7 +21,7 @@ This project implements a 5-stage pipelined MIPS CPU with full data hazard detec
 
 ## Architecture Overview
 
-![mips\_architecture](doc/mips_architecture.png)
+![mips\_architecture](doc/mips_architecture.jpg)
 High-level datapath with forwarding, hazard detection, and branch resolution in Decode stage.
 
 ---
