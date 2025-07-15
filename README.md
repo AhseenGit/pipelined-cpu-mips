@@ -109,9 +109,13 @@ This project deepened my understanding of pipelined CPU architecture, control lo
 ---
 
 ## Contact
+<<<<<<< HEAD
 
 For questions, feedback, or collaboration inquiries, feel free to reach out:
 
 **Ahseen**  
  azazmehhus@example.com
 
+=======
+later
+>>>>>>> 55e056e16cff0def6c1adccb4d7d08b81b8ee352
